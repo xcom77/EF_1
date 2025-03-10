@@ -29,4 +29,13 @@ theo.solve(x_theo)
 fig = mef.Fig_temp()
 fig.plot(theo, label="Analytical", color="k")
 fig.legend()
+
+# ==============================================================
+# Solution with a single linear element
+# ==============================================================
+fe_1el_lin = mef.ThermalBeam_fe_1el_lin(a, Ta, Lbda, h, q0)
+fe_1el_lin.solve(L)
+fe_1el_lin.postprocess(x_theo)
+fig.plot(fe_1el_lin, label="*1 linear elem.*", color="r")
+fig.legend()
 fig.show()
