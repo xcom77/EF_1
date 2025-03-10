@@ -59,3 +59,6 @@ class Fig_temp:
     def legend(self, **kwargs):
         self.ax[0].legend(**kwargs)
         self.ax[1].legend(**kwargs)
+
+    def show(self, **kwargs):
+        plt.show()
