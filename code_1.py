@@ -16,6 +16,7 @@ q0 = 2000    # Heat flow source [W/m^2]
 # ==================================================
 # Analytical solution of the problem
 # ==================================================
+
 # Initialization of the analytical model
 theo = mef.ThermalBeam_th(a, Ta, Lbda, h, q0)
 
@@ -29,3 +30,4 @@ theo.solve(x_theo)
 fig = mef.Fig_temp()
 fig.plot(theo, label="Analytical", color="k")
 fig.legend()
+fig.show()
