@@ -151,3 +151,168 @@ class ThermalBeam_fe_Nel_lin:
             self.x[ind_stock] = self.xn[indices]
             self.T[ind_stock] = self.fe_Tn[indices]
             self.q[ind_stock] = - self.Lbda * np.ones(2) * np.diff(self.fe_Tn[indices]) / self.le
+
+class Pt_Gauss:
+    def __init__(self, N):
+        self.N = N
+
+        # Up to polynomial of order 1
+        if N == 1:
+            self.xi = np.array([0])
+            self.w = np.array([2])
+
+        # Up to polynomial of order 3
+        elif N == 2:
+            self.xi = 1 / np.sqrt(3) * np.array([-1, 1])
+            self.w = np.ones(2)
+
+        # Up to polynomial of order 5
+        elif N == 3:
+            self.xi = np.sqrt(3 / 5) * np.array([-1, 0, 1])
+            self.w = np.array([5, 8, 5]) / 9
+            
+class Element_quad:
+    def __init__(self, x, dof):
+        # Here, x defines the nodes on the boundaries of the quadratic element
+        # The middle node is added here
+        self.x_el = np.array([x[0], (x[0] + x[1]) / 2, x[1]])
+        self.le = x[1] - x[0]
+        # Indices of the degree of freedom (dof) in the global matrices
+        self.dof = dof
+        # Jacobian J = dx / dξ
+        self.J = self.le / 2
+        # j = dξ / dx
+        self.j = 2 / self.le
+        Pn = np.array([
+            [1, -1, 1],
+            [1, 0, 0],
+            [1, 1, 1]
+        ])
+        self.inv_Pn = np.linalg.inv(Pn)
+
+    # Polynomial basis
+    def P(self, xi):
+        return np.array([ 1, xi, xi**2])
+
+    # Derivative of the polynomial basis
+    def P_xi(self, xi):
+        return np.array([ 0, 1, 2*xi])
+
+    # Interpolation function
+    def N(self, xi):
+        return self.P * (1/2) * self.inv_Pn
+
+    # Derivative of the interpolation function
+    def N_xi(self, xi):
+        return self.P_xi * (1/2) * self.inv_Pn
+
+    # Derivative of the interpolation function
+    def N_x(self, xi):
+        return self.j * self.N_xi
+
+    # Computation of the elementary matrix M1
+    def M1_el(self, coeff):
+        # Gauss point
+        Pt = Pt_Gauss(2)
+        mat = np.zeros((3, 3))
+        for ind in range(0, Pt.N):
+            w = Pt.w[ind]  # Weight
+            xi = Pt.xi[ind]  # Integration point (Gauss)
+            N_x = self.N_x(xi)
+            mat += w * np.outer(N_x, N_x) * self.J
+        # Elementary matrix M1
+        return coeff * mat
+
+    # Computation of the elementary matrix M3
+    def M3_el(self, coeff):
+        # Gauss point
+        Pt = Pt_Gauss(3)
+        mat = np.zeros((3, 3))
+        for ind in range(0, Pt.N):
+            w = Pt.w[ind]  # Weight
+            xi = Pt.xi[ind]  # Integration point (Gauss)
+            N = self.N(xi)
+            mat += w * np.outer(N, N) * self.J
+        # Elementary matrix M3
+        return coeff * mat
+
+    # Computation of the elementary vector V4
+    def V4_el(self, coeff):
+        # Gauss point
+        Pt = Pt_Gauss(2)
+        vect = np.zeros(3)
+        for ind in range(0, Pt.N):
+            w = Pt.w[ind]  # Weight
+            xi = Pt.xi[ind]  # Integration point (Gauss)
+            N = self.N(xi)
+            vect += w * N * self.J
+        # Elementary matrix V4
+        return coeff * vect
+
+class ThermalBeam_fe_quad:
+    def __init__(self, a, Ta, Lbda, h, q0):
+        self.a = a  # Thickness of the beam [m]
+        self.Ta = Ta  # Ambient temperature [°C]
+        self.Lbda = Lbda  # Thermal conductivity [W/m°C]
+        self.h = h  # Convective loss coefficient [W/m²°C]
+        self.q0 = q0  # Heat flow source [W/m²]
+
+    def mesh(self, xn):
+        self.L = xn[-1]
+        self.xn = xn
+        # Number of nodes and elements
+        nb_nodes = len(xn)
+        nb_elem = nb_nodes - 1
+        # Loop over the elements
+        self.elem = []
+        for ind in range(0, nb_elem):
+            # Indices of the nodes (only boundary ones)
+            ind_xn = ind + np.array([0, 1])
+            x_el = self.xn[ind_xn]
+            # Indices of the degree of freedom of the element (3 dof per element)
+            dof = 2*ind + np.array([0, 1, 2])
+            # Creation of an element
+            self.elem.append(Element_quad(x_el, dof))
+
+    def solve(self):
+        # Matrix initialization
+        Nb_dof = len(self.elem) + len(self.xn)
+        self.fe_M = np.zeros((Nb_dof, Nb_dof))
+        self.fe_V = np.zeros(Nb_dof)
+        coeff_1 = self.Lbda
+        coeff_3 = 4 * self.h / self.a
+        coeff_4 = 4 * self.h / self.a * self.Ta
+        # Matrix assembly for each element
+        for el in self.elem:
+            indices = el.dof
+            ix_indices = np.ix_(indices, indices)
+            self.fe_M[ix_indices] += el.M1_el(coeff_1) + el.M3_el(coeff_3)
+            self.fe_V[ix_indices] += el.V4_el(coeff_4) 
+        # 2nd term ==> h TL* TL
+        self.fe_M[-1, -1] += self.h
+        # 5th term ==> T0* q0
+        self.fe_V[0] += self.q0
+        # 6th term ==> h TL* TA
+        self.fe_V[-1] += self.h * self.Ta
+        # Resolution
+        self.fe_Tn = np.linalg.solve(self.fe_M, self.fe_V)
+
+    def postprocess(self):
+        # Vector initialization
+        Nb_nodes = 3 * len(self.elem)
+        self.x = np.zeros(Nb_nodes)
+        self.T = np.zeros(Nb_nodes)
+        self.q = np.zeros(Nb_nodes)
+        # Postprocessing of the temperature and heat flow
+        for ind, el in enumerate(self.elem):
+            # Temperature value at the nodes of the current element
+            dof = el.dof
+            Tn_el = self.fe_Tn[dof]
+            # Indices for storage
+            ind_stock = 3*ind + np.array([0, 1, 2])
+            # Position
+            self.x[ind_stock] = el.x_el
+            # Temperature
+            self.T[ind_stock] = np.row_stack((el.N(-1), el.N(0), el.N(1))) @ Tn_el
+            self.q[ind_stock] = - self.Lbda * np.row_stack((el.N_x(-1), el.N_x(0), el.N_x(1))) @ Tn_el
+

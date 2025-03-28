@@ -58,4 +58,17 @@ fig.plot(fe_Nel_lin, label="12 Linear elem.", color=[0, 0.8, 0],
          marker='o', markerfacecolor='none', markersize=3)
 fig.legend(fontsize=8)
 
+# ==================================================
+# Solution with quadratic element and reference elements
+# ==================================================
+fe_quad = mef.ThermalBeam_fe_quad(a, Ta, Lbda, h, q0)
+# Discretization of the beam
+xn = np.linspace(0, L, 3)
+fe_quad.mesh(xn)
+fe_quad.solve()
+fe_quad.postprocess()
+fig.plot(fe_quad, label="2 quadratic elem.", color='k', linestyle='--', 
+         marker='o', markerfacecolor='none', markersize=3)
+fig.legend(fontsize=8)
+
 fig.show()
