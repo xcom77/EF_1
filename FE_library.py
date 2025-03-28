@@ -102,3 +102,52 @@ class ThermalBeam_fe_1el_lin:
         P_x = np.zeros((len(x), 2))
         P_x[:, 1] = 1
         self.q = -self.Lbda * P_x @ (np.array([[1, 0], [-1/L, 1/L]]) @ self.fe_Tn)
+
+class ThermalBeam_fe_Nel_lin:
+    def __init__(self, a, Ta, Lbda, h, q0):
+        self.a = a       # Thickness of the beam [m]
+        self.Ta = Ta     # Ambient temperature [°C]
+        self.Lbda = Lbda # Thermal conductivity [W/m/°C]
+        self.h = h       # Convective loss coefficient [W/m^2/°C]
+        self.q0 = q0     # Heat flow source [W/m^2]
+
+    def mesh(self, L, N):
+        self.L = L
+        self.xn = np.linspace(0, L, N)
+        self.le = L / (N-1)
+
+    def solve(self):
+        M1 = self.Lbda / self.le * np.array([[1, -1], [-1, 1]])
+        M3 = 4/6 * self.h * self.le / self.a * np.array([[2, 1], [1, 2]])
+        V1 = 4/2 * self.h * self.le * self.Ta / self.a * np.array([1, 1])
+        Nb_nodes = len(self.xn)
+        Nb_elem = Nb_nodes - 1
+        self.fe_M = np.zeros((Nb_nodes, Nb_nodes))
+        self.fe_V = np.zeros(Nb_nodes)
+        for ind in range(0, Nb_elem):
+            indices = ind + np.array([0, 1])
+            self.fe_M[np.ix_(indices, indices)] += M1 + M3
+            self.fe_V[np.ix_(indices)] += V1
+        # 2nd term ==> h TL* TL
+        self.fe_M[-1, -1] += self.h
+        # 5th term ==> T0* q0
+        self.fe_V[0] += self.q0
+        # 6th term ==> h TL* TA
+        self.fe_V[-1] += self.h * self.Ta
+        # Resolution
+        self.fe_Tn = np.linalg.solve(self.fe_M, self.fe_V)
+
+    def postprocess(self):
+        # Vector initialization
+        Nb_nodes = len(self.xn)
+        Nb_elem = Nb_nodes - 1
+        self.x = np.zeros(2*Nb_elem)
+        self.T = np.zeros(2*Nb_elem)
+        self.q = np.zeros(2*Nb_elem)
+        # Postprocessing of the temperature and heat flow
+        for ind in range(0, Nb_elem):
+            indices = ind + np.array([0, 1])
+            ind_stock = 2*ind + np.array([0, 1])
+            self.x[ind_stock] = self.xn[indices]
+            self.T[ind_stock] = self.fe_Tn[indices]
+            self.q[ind_stock] = - self.Lbda * np.ones(2) * np.diff(self.fe_Tn[indices]) / self.le

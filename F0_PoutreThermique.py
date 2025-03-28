@@ -36,6 +36,26 @@ fig.legend()
 fe_1el_lin = mef.ThermalBeam_fe_1el_lin(a, Ta, Lbda, h, q0)
 fe_1el_lin.solve(L)
 fe_1el_lin.postprocess(x_theo)
-fig.plot(fe_1el_lin, label="*1 linear elem.*", color="r")
+fig.plot(fe_1el_lin, label="1 linear element", color="r")
 fig.legend()
+
+# ==================================================
+# Solution with several linear elements
+# ==================================================
+fe_Nel_lin = mef.ThermalBeam_fe_Nel_lin(a, Ta, Lbda, h, q0)
+# 4 elements and 5 nodes
+fe_Nel_lin.mesh(L, 5)
+fe_Nel_lin.solve()
+fe_Nel_lin.postprocess()
+fig.plot(fe_Nel_lin, label="4 Linear elem.", color="b",
+         marker='o', markerfacecolor='none', markersize=3)
+fig.legend(fontsize=8)
+# 12 elements and 13 nodes
+fe_Nel_lin.mesh(L, 13)
+fe_Nel_lin.solve()
+fe_Nel_lin.postprocess()
+fig.plot(fe_Nel_lin, label="12 Linear elem.", color=[0, 0.8, 0],
+         marker='o', markerfacecolor='none', markersize=3)
+fig.legend(fontsize=8)
+
 fig.show()
